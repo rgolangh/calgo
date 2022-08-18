@@ -1,7 +1,7 @@
 .PHONY: help tools build check run logs
 
 help: help.all
-build: build
+build: build.local
 check: check.imports check.fmt check.lint check.test
 run: run.plan
 
@@ -75,7 +75,7 @@ build.vendor.full:
 	go mod vendor
 
 #help build: build locally a binary, in target/ folder
-build: build.prepare
+build.local: build.prepare
 	go build -mod=vendor $(BUILD_ARGS) -ldflags "-X main.CommitID=$(GIT_COMMIT) -s -w" \
 	-o $(CURDIR)/target/$(NAME) $(CURDIR)/main.go
 
