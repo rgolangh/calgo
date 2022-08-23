@@ -65,15 +65,6 @@ build.prepare:
 	@mkdir -p $(CURDIR)/target
 	@rm -f $(CURDIR)/target/$(NAME)
 
-#help build.vendor: retrieve all the dependencies used for the project
-build.vendor:
-	go mod vendor
-
-#help build.vendor.full: retrieve all the dependencies after cleaning the go.sum
-build.vendor.full:
-	@rm -fr $(CURDIR)/vendor
-	go mod vendor
-
 #help build: build locally a binary, in target/ folder
 build.local: build.prepare
 	go build -mod=vendor $(BUILD_ARGS) -ldflags "-X main.CommitID=$(GIT_COMMIT) -s -w" \
@@ -108,17 +99,3 @@ check.lint:
 #help check.test: execute go tests
 check.test: 
 	go test -mod=vendor ./...
-
-
-#####################
-# Run               #
-#####################
-
-.PHONY: run.init
-
-#help run.local: run the application locally
-run.int:
-	@$(CURDIR)/target/$(NAME) init | $(COLORIZE)
-
-run.plan:
-	@$(CURDIR)/target/$(NAME) plan | $(COLORIZE)
