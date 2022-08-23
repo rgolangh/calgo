@@ -89,7 +89,10 @@ to quickly create a Cobra application.`,
 // n or n-n where n is the day and return 2 datetime representing
 // the min start time and max start time of meeting to search for
 func getMinMaxStartTimes(s string) (time.Time, time.Time, error) {
-	var tmin, tmax time.Time
+	tmin := time.Now()
+	tmax := time.Now()
+	//tmin := time.Now().Format(time.RFC3339)
+	//tmax := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 0, now.Location()).Format(time.RFC3339)
 
 	compile, err := regexp.Compile("^\\d+(-\\d+)?$")
 	if err != nil {
