@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/rgolangh/calgo/internal/google_calendar"
-	"google.golang.org/api/calendar/v3"
+	"github.com/rgolangh/calgo/internal/presenter"
 
 	"github.com/spf13/cobra"
 )
@@ -68,17 +68,14 @@ to quickly create a Cobra application.`,
 			log.Fatalf("Unable to retrieve next ten of the user's events: %v", err)
 		}
 
-		fmt.Println("Upcoming events:")
+		if outputFormat == "pretty" {
+			fmt.Println("Upcoming events:")
+		}
 		if len(events.Items) == 0 {
 			fmt.Println("No upcoming events found.")
 		} else {
-			for _, item := range events.Items {
-				date := item.Start.DateTime
-				if date == "" {
-					date = item.Start.Date
-				}
-				printEvent(item)
-			}
+			output := presenter.FormatEvents(events, outputFormat)
+			fmt.Printf("%s\n", output)
 		}
 
 		return nil
@@ -142,10 +139,6 @@ func timeFromExpression(s string) (time.Time, error) {
 	}
 
 	return t, nil
-}
-
-func printEvent(e *calendar.Event) {
-	fmt.Printf("%v - %v\n", e.Start.DateTime, e.Summary)
 }
 
 func init() {
