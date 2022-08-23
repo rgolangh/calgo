@@ -1,9 +1,8 @@
-.PHONY: help tools build check run logs
+.PHONY: help tools build check
 
 help: help.all
 build: build.local
 check: check.imports check.fmt check.lint check.test
-run: run.plan
 
 # Colors used in this Makefile
 escape=$(shell printf '\033')
@@ -12,26 +11,14 @@ COLOR_YELLOW=$(escape)[38;5;220m
 COLOR_RED=$(escape)[91m
 COLOR_BLUE=$(escape)[94m
 
-COLOR_LEVEL_TRACE=$(escape)[38;5;87m
-COLOR_LEVEL_DEBUG=$(escape)[38;5;87m
-COLOR_LEVEL_INFO=$(escape)[92m
-COLOR_LEVEL_WARN=$(escape)[38;5;208m
-COLOR_LEVEL_ERROR=$(escape)[91m
-COLOR_LEVEL_FATAL=$(escape)[91m
-
-define COLORIZE
-sed -u -e "s/\\\\\"/'/g; \
-s/Method\([^ ]*\)/Method$(COLOR_BLUE)\1$(RESET_COLOR)/g;        \
-s/ERROR\"\([^\"]*\)\"/error=\"$(COLOR_RED)\1$(RESET_COLOR)\"/g;  \
-s/ProductID:\s\([^\"]*\)/$(COLOR_YELLOW)ProductID: \1$(RESET_COLOR)/g;   \
-s/\[TRACE\]/$(COLOR_LEVEL_TRACE)\[TRACE\]$(RESET_COLOR)/g;    \
-s/\[DEBUG\]/$(COLOR_LEVEL_DEBUG)DEBUG$(RESET_COLOR)/g;    \
-s/\[INFO\]/$(COLOR_LEVEL_INFO)[INFO]$(RESET_COLOR)/g;       \
-s/\[WARNING\]/$(COLOR_LEVEL_WARN)[WARNING]$(RESET_COLOR)/g; \
-s/\[ERROR\]/$(COLOR_LEVEL_ERROR)[ERROR]$(RESET_COLOR)/g;    \
-s/\[FATAL\]/level=$(COLOR_LEVEL_FATAL)[FATAL]$(RESET_COLOR)/g"
-endef
-
+#####################
+# Variables         #
+#####################
+NAME=calgo
+VERSION ?= 0.1
+GIT_COMMIT=$(shell git rev-list -1 HEAD --abbrev-commit)
+GO_VERSION=1.18
+DOCKER ?= podman
 
 #####################
 # Help targets      #
@@ -53,12 +40,7 @@ help.all:
 #####################
 # Build targets     #
 #####################
-NAME=calgo
-VERSION=0.1
-GIT_COMMIT=$(shell git rev-list -1 HEAD --abbrev-commit)
-GO_VERSION=1.17
-
-.PHONY: build.prepare build.vendor build.vendor.full build
+.PHONY: build.prepare build.local
 
 #help build.prepare: prepare target/ folder
 build.prepare:
@@ -74,27 +56,26 @@ build.local: build.prepare
 # Check targets     #
 #####################
 
-LINT_COMMAND=golangci-lint run
-FILES_LIST=$(shell ls -d */ | grep -v -E "vendor|tools|target|client|restapi|models")
-TOOLS_DOCKER_IMAGE=go-1.17:alpine
+FILES_LIST=$(shell ls -d */ | grep -v -E "vendor|target")
+LINT_IMAGE=golangci/golangci-lint:v1.45.0
 MODULE_NAME=$(shell head -n 1 go.mod | cut -d '/' -f 3)
 
 .PHONY: check.fmt check.imports check.lint check.test 
 
 #help check.fmt: format go code
 check.fmt: 
-	docker run --rm -v $(CURDIR):$(CURDIR) -w="$(CURDIR)"  $(TOOLS_DOCKER_IMAGE) sh -c 'gofumpt -s -w $(FILES_LIST)'
+	$(DOCKER) run --rm -v $(CURDIR):$(CURDIR) -w="$(CURDIR)"  $(TOOLS_DOCKER_IMAGE) sh -c 'gofumpt -s -w $(FILES_LIST)'
 
 #help check.imports: fix and format go imports
 check.imports: 
 	@# Removes blank lines within import block so that goimports does its magic in a deterministic way
 	find $(FILES_LIST) -type f -name "*.go" | xargs -L 1 sed -i '/import (/,/)/{/import (/n;/)/!{/^$$/d}}'
-	docker run --rm -v $(CURDIR):$(CURDIR) -w="$(CURDIR)" $(TOOLS_DOCKER_IMAGE) sh -c 'goimports -w -local github.com/rgolangh $(FILES_LIST)'
-	docker run --rm -v $(CURDIR):$(CURDIR) -w="$(CURDIR)" $(TOOLS_DOCKER_IMAGE) sh -c 'goimports -w -local github.com/rgolangh/$(MODULE_NAME) $(FILES_LIST)'
+	$(DOCKER) run --rm -v $(CURDIR):$(CURDIR) -w="$(CURDIR)" $(TOOLS_DOCKER_IMAGE) sh -c 'goimports -w -local github.com/rgolangh $(FILES_LIST)'
+	$(DOCKER) run --rm -v $(CURDIR):$(CURDIR) -w="$(CURDIR)" $(TOOLS_DOCKER_IMAGE) sh -c 'goimports -w -local github.com/rgolangh/$(MODULE_NAME) $(FILES_LIST)'
 
 #help check.lint: check if the go code is properly written, rules are in .golangci.yml
 check.lint: 
-	docker run --rm -v $(CURDIR):$(CURDIR) -w="$(CURDIR)" $(TOOLS_DOCKER_IMAGE) sh -c '$(LINT_COMMAND)'
+	$(DOCKER) run --rm -v $(CURDIR):$(CURDIR) -w="$(CURDIR)" $(LINT_IMAGE) sh -c 'golangci-lint run'
 
 #help check.test: execute go tests
 check.test: 
