@@ -17,11 +17,12 @@ import (
 func Service() *calendar.Service {
 	code := make(chan string)
 	go func() {
+		authCallbackSrv := http.Server{Addr: "localhost:8111"}
 		http.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
 			code <- request.URL.Query().Get("code")
-			close(code)
+			authCallbackSrv.Close()
 		})
-		http.ListenAndServe("localhost:8111", nil)
+		authCallbackSrv.ListenAndServe()
 	}()
 
 	ctx := context.Background()
