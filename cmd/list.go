@@ -29,6 +29,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const dateExpressionRegex = "^(s|m|t|w|th|f|sa)|(-?\\d+(-\\d+)?)$"
+
 var (
 	calendarID string
 )
@@ -47,9 +49,8 @@ to quickly create a Cobra application.`,
 		if len(args) == 0 {
 			return nil
 		}
-
 		// first arg is either a day expression, or a range if it has a hyphen
-		compile, err := regexp.Compile("^\\d+(-\\d+)?$")
+		compile, err := regexp.Compile(dateExpressionRegex)
 		if err != nil {
 			return err
 		}
@@ -59,11 +60,20 @@ to quickly create a Cobra application.`,
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		tmin, tmax, err := getMinMaxStartTimes(args[0])
+		tmin, tmax, err := getTimeBoundaries(args)
+		if err != nil {
+			return err
+		}
 		srv := google_calendar.Service()
 
-		events, err := srv.Events.List(calendarID).ShowDeleted(false).
-			SingleEvents(true).TimeMin(tmin.Format(time.RFC3339)).TimeMax(tmax.Format(time.RFC3339)).MaxResults(10).OrderBy("startTime").Do()
+		events, err := srv.Events.List(calendarID).
+			ShowDeleted(false).
+			SingleEvents(true).
+			TimeMin(tmin.Format(time.RFC3339)).
+			TimeMax(tmax.Format(time.RFC3339)).
+			MaxResults(10).
+			OrderBy("startTime").
+			Do()
 		if err != nil {
 			log.Fatalf("Unable to retrieve next ten of the user's events: %v", err)
 		}
@@ -80,71 +90,119 @@ to quickly create a Cobra application.`,
 				printEvent(item)
 			}
 		}
-
 		return nil
 	},
 }
 
-// getMinMaxTimes get a day, or range expression in the form of
-// n or n-n where n is the day and return 2 datetime representing
-// the min start time and max start time of meeting to search for
-func getMinMaxStartTimes(s string) (time.Time, time.Time, error) {
-	tmin := time.Now()
-	tmax := time.Now()
-	//tmin := time.Now().Format(time.RFC3339)
-	//tmax := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 0, now.Location()).Format(time.RFC3339)
-
-	compile, err := regexp.Compile("^\\d+(-\\d+)?$")
-	if err != nil {
-		return tmin, tmax, err
-	}
-	if !compile.MatchString(s) {
-		return tmin, tmax, fmt.Errorf("first argument is not a day or range expression")
-	}
-
-	isRange := strings.Contains(s, "-")
-	if !isRange {
-		tmax, err = timeFromExpression(s)
+func getTimeBoundaries(args []string) (time.Time, time.Time, error) {
+	var tmin, tmax time.Time
+	var err error = nil
+	if len(args) == 0 {
+		tmin = time.Now()
+		tmax = time.Now()
+	} else {
+		tmin, tmax, err = parseDatetimeExpression(args[0])
 		if err != nil {
 			return tmin, tmax, err
 		}
 	}
+	tmin = startOfDay(tmin)
+	tmax = endOfDay(tmax)
+	return tmin, tmax, nil
+}
 
+func startOfDay(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+}
+
+func endOfDay(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 23, 59, 59, 999999999, t.Location())
+}
+
+// parseDatetimeExpression get a day, or range expression in the form of
+// n or n-n where n is the day and return 2 datetime representing
+// the min start time and max start time of meeting to search for
+func parseDatetimeExpression(s string) (time.Time, time.Time, error) {
+	tmin := time.Now()
+	tmax := time.Now()
+
+	compile, err := regexp.Compile(dateExpressionRegex)
+	if err != nil {
+		return tmin, tmax, err
+	}
+	if !compile.MatchString(s) {
+		return tmin, tmax, fmt.Errorf("basic validation - first argument is not a day or range expression")
+	}
+
+	compile, err = regexp.Compile("^((\\d+)|(s|m|t|w|th|f|sa))(-)((\\d+)|(s|m|t|w|th|f|sa))?$")
+	if err != nil {
+		return tmin, tmax, err
+	}
+	submatch := compile.FindSubmatch([]byte(s))
+	isRange := len(submatch) > 1
+	if isRange {
+		split := strings.Split(s, "-")
+		tmin, err = timeFromExpression(split[0])
+		if err != nil {
+			return tmin, tmax, err
+		}
+		tmax, err = timeFromExpression(split[1])
+		if err != nil {
+			return tmin, tmax, err
+		}
+	} else {
+		tmax, err = timeFromExpression(s)
+		tmin = tmax
+		if err != nil {
+			return tmin, tmax, err
+		}
+	}
 	return tmin, tmax, nil
 }
 
 func timeFromExpression(s string) (time.Time, error) {
-
 	t := time.Now()
 	if strings.HasPrefix(s, "+") || strings.HasPrefix(s, "-") {
 		atoi, err := strconv.Atoi(s)
 		if err != nil {
 			return t, err
 		}
-		return t.AddDate(0, 0, atoi), nil
+		t = t.AddDate(0, 0, atoi)
+		return t, nil
 	}
 
-	// currently supporting extracting dates for this week only
+	var targetWeekday time.Weekday
 	switch s {
 	case "1", "s":
-		t.AddDate(0, 0, int(time.Sunday-t.Weekday()))
+		targetWeekday = time.Sunday
 	case "2", "m":
-		t.AddDate(0, 0, int(time.Monday-t.Weekday()))
+		targetWeekday = time.Monday
 	case "3", "t":
-		t.AddDate(0, 0, int(time.Tuesday-t.Weekday()))
+		targetWeekday = time.Tuesday
 	case "4", "w":
-		t.AddDate(0, 0, int(time.Wednesday-t.Weekday()))
+		targetWeekday = time.Wednesday
 	case "5", "th":
-		t.AddDate(0, 0, int(time.Thursday-t.Weekday()))
+		targetWeekday = time.Thursday
 	case "6", "f":
-		t.AddDate(0, 0, int(time.Friday-t.Weekday()))
+		targetWeekday = time.Friday
 	case "7", "sa":
-		t.AddDate(0, 0, int(time.Saturday-t.Weekday()))
+		targetWeekday = time.Saturday
 	default:
-		return t, fmt.Errorf("non supported expression %s", s)
+		return t, fmt.Errorf("unsupported expression %s", s)
 	}
-
-	return t, nil
+	// The calculated delta is always to the next coming target weekday
+	// always in a range of one week from now. For navigating or paging through the
+	// calendar there should be other expression forms or subcommands.
+	var delta int
+	// calculate delta to the targetWeekDay. Weekdays values are 0-6
+	if targetWeekday >= t.Weekday() {
+		// e.g Thursday > Monday
+		delta = int(targetWeekday - t.Weekday())
+	} else {
+		// e.g Sunday < Thursday
+		delta = 7 - int(t.Weekday()-targetWeekday)
+	}
+	return t.AddDate(0, 0, delta), nil
 }
 
 func printEvent(e *calendar.Event) {
