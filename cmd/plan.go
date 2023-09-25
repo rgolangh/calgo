@@ -28,7 +28,6 @@ type Focus struct {
 	Duration time.Duration
 	Title    string `default:"Focus Time"`
 }
-
 type Meeting struct {
 	Duration    time.Duration
 	Title       string
@@ -44,6 +43,9 @@ type Plan struct {
 	events           Events
 	overallFocusTime time.Duration
 	focusDuration    time.Duration
+	slots            []Slot
+	focuses          []Focus
+	meetings         []Meeting
 }
 
 func newPlan(calId string, service *calendar.Service) *Plan {
