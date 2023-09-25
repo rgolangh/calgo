@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package cmd
 
 import (
@@ -5,6 +6,7 @@ import (
 	"time"
 )
 
+// is this expression for dates worth a module of its own?
 func TestDateExpressionParsing(t *testing.T) {
 	var tuesdayThe30th, _ = time.Parse(time.RFC3339, "2022-08-30T15:04:05Z03:00") // Tuesday of some week
 
@@ -78,7 +80,7 @@ func TestDateExpressionParsing(t *testing.T) {
 
 	for _, testCase := range cases {
 		t.Run(testCase.in, func(t *testing.T) {
-			tmin, tmax, err := parseDatetimeExpression(testCase.in)
+			tmin, tmax, err := parseDatetimeExpression(testCase.currrentTime, testCase.in)
 			if err != nil {
 				t.Errorf("failed get min max times from %q error: %v", testCase.in, err)
 			}

@@ -1,18 +1,4 @@
-/*
-Copyright © 2022 NAME HERE <EMAIL ADDRESS>
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-	http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+// SPDX-License-Identifier: Apache-2.0
 package cmd
 
 import (
@@ -35,16 +21,17 @@ var (
 	calendarID string
 )
 
-// initCmd represents the init command
+const maxEvents = 10
+const sortField = "startTime"
+const showDeleted = false
+
+// listCmd is for listing events on a calendar
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List events",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Long: fmt.Sprintf(`List events from a calendar with a default number of %d
+and sorted by their %s
+	`, maxEvents, sortField),
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
 			return nil
@@ -67,12 +54,12 @@ to quickly create a Cobra application.`,
 		srv := google_calendar.Service()
 
 		events, err := srv.Events.List(calendarID).
-			ShowDeleted(false).
+			ShowDeleted(showDeleted).
 			SingleEvents(true).
 			TimeMin(tmin.Format(time.RFC3339)).
 			TimeMax(tmax.Format(time.RFC3339)).
-			MaxResults(10).
-			OrderBy("startTime").
+			MaxResults(maxEvents).
+			OrderBy(sortField).
 			Do()
 		if err != nil {
 			log.Fatalf("Unable to retrieve next ten of the user's events: %v", err)
@@ -83,10 +70,6 @@ to quickly create a Cobra application.`,
 			fmt.Println("No upcoming events found.")
 		} else {
 			for _, item := range events.Items {
-				date := item.Start.DateTime
-				if date == "" {
-					date = item.Start.Date
-				}
 				printEvent(item)
 			}
 		}
@@ -101,7 +84,7 @@ func getTimeBoundaries(args []string) (time.Time, time.Time, error) {
 		tmin = time.Now()
 		tmax = time.Now()
 	} else {
-		tmin, tmax, err = parseDatetimeExpression(args[0])
+		tmin, tmax, err = parseDatetimeExpression(time.Now(), args[0])
 		if err != nil {
 			return tmin, tmax, err
 		}
@@ -112,19 +95,19 @@ func getTimeBoundaries(args []string) (time.Time, time.Time, error) {
 }
 
 func startOfDay(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+	return time.Date(t.Year(), t.Month(), t.Day(), 8, 0, 0, 0, t.Location())
 }
 
 func endOfDay(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), t.Day(), 23, 59, 59, 999999999, t.Location())
+	return time.Date(t.Year(), t.Month(), t.Day(), 20, 0, 0, 0, t.Location())
 }
 
 // parseDatetimeExpression get a day, or range expression in the form of
 // n or n-n where n is the day and return 2 datetime representing
 // the min start time and max start time of meeting to search for
-func parseDatetimeExpression(s string) (time.Time, time.Time, error) {
-	tmin := time.Now()
-	tmax := time.Now()
+func parseDatetimeExpression(pointInTime time.Time, s string) (time.Time, time.Time, error) {
+	tmin := pointInTime
+	tmax := pointInTime
 
 	compile, err := regexp.Compile(dateExpressionRegex)
 	if err != nil {
@@ -142,16 +125,16 @@ func parseDatetimeExpression(s string) (time.Time, time.Time, error) {
 	isRange := len(submatch) > 1
 	if isRange {
 		split := strings.Split(s, "-")
-		tmin, err = timeFromExpression(split[0])
+		tmin, err = timeFromExpression(pointInTime, split[0])
 		if err != nil {
 			return tmin, tmax, err
 		}
-		tmax, err = timeFromExpression(split[1])
+		tmax, err = timeFromExpression(pointInTime, split[1])
 		if err != nil {
 			return tmin, tmax, err
 		}
 	} else {
-		tmax, err = timeFromExpression(s)
+		tmax, err = timeFromExpression(pointInTime, s)
 		tmin = tmax
 		if err != nil {
 			return tmin, tmax, err
@@ -160,15 +143,15 @@ func parseDatetimeExpression(s string) (time.Time, time.Time, error) {
 	return tmin, tmax, nil
 }
 
-func timeFromExpression(s string) (time.Time, error) {
-	t := time.Now()
+// is this date expression worth a specialized module of its own?
+func timeFromExpression(pointInTime time.Time, s string) (time.Time, error) {
 	if strings.HasPrefix(s, "+") || strings.HasPrefix(s, "-") {
 		atoi, err := strconv.Atoi(s)
 		if err != nil {
-			return t, err
+			return pointInTime, err
 		}
-		t = t.AddDate(0, 0, atoi)
-		return t, nil
+		pointInTime = pointInTime.AddDate(0, 0, atoi)
+		return pointInTime, nil
 	}
 
 	var targetWeekday time.Weekday
@@ -188,28 +171,36 @@ func timeFromExpression(s string) (time.Time, error) {
 	case "7", "sa":
 		targetWeekday = time.Saturday
 	default:
-		return t, fmt.Errorf("unsupported expression %s", s)
+		return pointInTime, fmt.Errorf("unsupported expression %s", s)
 	}
 	// The calculated delta is always to the next coming target weekday
 	// always in a range of one week from now. For navigating or paging through the
 	// calendar there should be other expression forms or subcommands.
 	var delta int
 	// calculate delta to the targetWeekDay. Weekdays values are 0-6
-	if targetWeekday >= t.Weekday() {
+	if targetWeekday >= pointInTime.Weekday() {
 		// e.g Thursday > Monday
-		delta = int(targetWeekday - t.Weekday())
+		delta = int(targetWeekday - pointInTime.Weekday())
 	} else {
 		// e.g Sunday < Thursday
-		delta = 7 - int(t.Weekday()-targetWeekday)
+		delta = 7 - int(pointInTime.Weekday()-targetWeekday)
 	}
-	return t.AddDate(0, 0, delta), nil
+	return pointInTime.AddDate(0, 0, delta), nil
 }
 
 func printEvent(e *calendar.Event) {
-	fmt.Printf("%v - %v\n", e.Start.DateTime, e.Summary)
+	parse, err := time.Parse(time.RFC3339, e.Start.DateTime)
+	if err != nil {
+		fmt.Println(err)
+	}
+	end, err := time.Parse(time.RFC3339, e.End.DateTime)
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Printf("%v-%v - %v\n", parse.Format(time.Kitchen), end.Format(time.Kitchen), e.Summary)
 }
 
 func init() {
 	rootCmd.AddCommand(listCmd)
-	listCmd.Flags().StringVar(&calendarID, "calendar_id", "primary", "id of the calendar")
+	listCmd.Flags().StringVar(&calendarID, "calendar-id", "primary", "id of the calendar")
 }

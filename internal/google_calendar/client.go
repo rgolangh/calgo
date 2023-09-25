@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package google_calendar
 
 import (
@@ -15,16 +16,6 @@ import (
 )
 
 func Service() *calendar.Service {
-	code := make(chan string)
-	go func() {
-		authCallbackSrv := http.Server{Addr: "localhost:8111"}
-		http.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
-			code <- request.URL.Query().Get("code")
-			authCallbackSrv.Close()
-		})
-		authCallbackSrv.ListenAndServe()
-	}()
-
 	ctx := context.Background()
 	b, err := ioutil.ReadFile("credentials.json")
 	if err != nil {
@@ -37,7 +28,7 @@ func Service() *calendar.Service {
 		log.Fatalf("Unable to parse client secret file to config: %v", err)
 	}
 
-	client := getClient(config, code)
+	client := getClient(config)
 
 	srv, err := calendar.NewService(ctx, option.WithHTTPClient(client))
 	if err != nil {
@@ -45,7 +36,18 @@ func Service() *calendar.Service {
 	}
 	return srv
 }
-func getTokenFromWeb(config *oauth2.Config, code <-chan string) *oauth2.Token {
+
+func getTokenFromWeb(config *oauth2.Config) *oauth2.Token {
+	code := make(chan string)
+	go func() {
+		authCallbackSrv := http.Server{Addr: "localhost:8111"}
+		http.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
+			code <- request.URL.Query().Get("code")
+			_ = authCallbackSrv.Close()
+		})
+		_ = authCallbackSrv.ListenAndServe()
+	}()
+
 	authURL := config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
 	fmt.Printf("Go to the following link in your browser then type the "+
 		"authorization code: \n%v\n", authURL)
@@ -64,14 +66,14 @@ func getTokenFromWeb(config *oauth2.Config, code <-chan string) *oauth2.Token {
 }
 
 // Retrieve a token, saves the token, then returns the generated client.
-func getClient(config *oauth2.Config, code <-chan string) *http.Client {
+func getClient(config *oauth2.Config) *http.Client {
 	// The file token.json stores the user's access and refresh tokens, and is
 	// created automatically when the authorization flow completes for the first
 	// time.
 	tokFile := "token.json"
 	tok, err := tokenFromFile(tokFile)
 	if err != nil {
-		tok = getTokenFromWeb(config, code)
+		tok = getTokenFromWeb(config)
 		saveToken(tokFile, tok)
 	}
 	return config.Client(context.Background(), tok)
@@ -97,5 +99,8 @@ func saveToken(path string, token *oauth2.Token) {
 		log.Fatalf("Unable to cache oauth token: %v", err)
 	}
 	defer f.Close()
-	json.NewEncoder(f).Encode(token)
+	err = json.NewEncoder(f).Encode(token)
+	if err != nil {
+		log.Fatalf("failed dto save the token: %v", err)
+	}
 }

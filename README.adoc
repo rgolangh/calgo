@@ -2,12 +2,14 @@
 calgo is a (google) calendar tool written in go, to quickly plan your day/week, like a boss
 
 == Examples
-```bash
+
+[source,bash]
+----
 $ calgo init
 paste you google token: ******************************************************
 ✔ verified
 
-$ calgo plan # plan today, like a boss
+$ calgo # view today's plan, like a boss
 
 7/8/22
 dd/mm/yy, today, 4 meetings, 4 hours overall
@@ -17,8 +19,8 @@ dd/mm/yy, today, 4 meetings, 4 hours overall
 - 12:00-13:00 mtg3
 - 15:00-16:00 mtg3
 
-$ calgo plan --focus-time 5 --meetings 2 --tasks 1 --break 1
-# 
+$ calgo plan --focus-time 5h --meetings 2h --tasks 1 --break 1
+#
 dd/mm/yy, today, 0 meetings
 [focus time] duration(minutes) for each interval?(45): 50
 [focus time] optional event name?(focus time): create calgo
@@ -39,11 +41,12 @@ rgo(tab) - rgolan@redhat.com
 
 
 ✔ meeting 2] scheduled to 15:00-15:50 as all attendents are available
-```
+----
 
 == Views
 
-```bash
+[source,bash]
+----
 $ calgo [DAY EXPRESSION]/[RANGE EXPRESSION] # daily view
 
 $ calgo 1 # show meetings on Sunday
@@ -53,19 +56,21 @@ $ calgo w-f # show meetings from Wednesday-Friday
 
 $ calgo +1 # show meetings tomorrow
 
-```
+----
 
-```
+[source]
+----
 DAY EXPRESSION - [1-7]: day of this week, 1 for Sunday and so on
                - [s]unday, [m]onday, [t]uesday, [w]ednesday, [th]ursday, [f]riday, [sa]turday
 			   - (+/-)n : i.e +1 is tomorrow, -1 is yesterday
 
 RANGE EXPRESSION - [DAY EXPRESSION]-[DAY EXPRESSION]
-```
-# Plan
+----
+== Plan
 
-```bash
+[source,bash]
+----
 $ calgo plan [DAY EXPRESSION]/[RANGE EXPRESSION] # plan like a boss
-```
+----
 
 
