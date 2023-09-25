@@ -13,10 +13,11 @@ import (
 )
 
 var (
-	interactive  bool
-	meetingsTime time.Duration
-	focusTime    time.Duration
-	tasks        time.Duration
+	interactive        bool
+	meetingsTime       time.Duration
+	focusTime          time.Duration
+	focusEventDuration time.Duration
+	tasks              time.Duration
 )
 
 type Slot struct {
@@ -70,7 +71,7 @@ func newPlan(calId string, service *calendar.Service) *Plan {
 		eventInserter:    eventInserter,
 		calendarId:       calId,
 		overallFocusTime: focusTime,
-		focusDuration:    time.Minute * 45,
+		focusDuration:    focusEventDuration,
 		events:           plannedEvents,
 	}
 }
@@ -125,7 +126,7 @@ var planCmd = &cobra.Command{
 	Use:   "plan",
 	Short: "Plan your day",
 	Long:  `Plan your day, add meetings, focus times, and break time.`,
-	Example: `$ calgo plan --focus-time 5 --meetings 2 --tasks 1 --break 1
+	Example: `$ calgo plan --focus-time 5h --tasks 1 --break 1
 # 
 dd/mm/yy, today, 0 meetings
 [focus time] duration(minutes) for each interval?(45): 50
@@ -150,6 +151,12 @@ rgo(tab) - rgolan@redhat.com
 		log.Println(plan)
 		plan.commit()
 
+		return nil
+	},
+	Args: func(cmd *cobra.Command, args []string) error {
+		if focusTime < focusEventDuration {
+			return fmt.Errorf("--focus-time (%s) must be greater then or equal to --focus-event-duration (%s)", focusTime, focusEventDuration)
+		}
 		return nil
 	},
 }
@@ -241,7 +248,14 @@ func (p *Plan) findNextSlot() (time.Time, error) {
 	y, m, d := p.date.Date()
 	y1, m1, d1 := time.Now().Date()
 	if y == y1 && m == m1 && d == d1 {
-		markpoint = startOfDay(time.Now())
+		s := startOfDay(time.Now())
+		// it maybe that the day already started and we want to plan. if now
+		// is later the startofday then use it.
+		if time.Now().After(s) {
+			markpoint = time.Now()
+		} else {
+			markpoint = s
+		}
 	} else {
 		markpoint = startOfDay(p.date)
 	}
@@ -274,6 +288,7 @@ func (p *Plan) findNextSlot() (time.Time, error) {
 func init() {
 	planCmd.Flags().BoolVar(&interactive, "interactive", true, "Ask before committing changes, ask optional inputs")
 	planCmd.Flags().DurationVar(&focusTime, "focus-time", time.Minute*45, "desired overall focus time duration (e.g 45m, 1h20m)")
+	planCmd.Flags().DurationVar(&focusEventDuration, "focus-event-duration", time.Minute*45, "desired focus time per event. An overall focus time is devided to events (e.g 45m, 1h20m)")
 	planCmd.Flags().DurationVar(&meetingsTime, "meetings", 0, "desired meetings overall time duration (e.g 1h30m")
 	planCmd.Flags().DurationVar(&tasks, "break", time.Hour, "desired break time duration (e.g 1h)")
 	rootCmd.AddCommand(planCmd)
