@@ -8,7 +8,7 @@ import (
 
 // is this expression for dates worth a module of its own?
 func TestDateExpressionParsing(t *testing.T) {
-	var tuesdayThe30th, _ = time.Parse(time.RFC3339, "2022-08-30T15:04:05Z03:00") // Tuesday of some week
+	var tuesdayThe30th, _ = time.Parse(time.RFC3339, "2022-08-30T15:04:05Z") // Tuesday of some week
 
 	cases := []struct {
 		in                 string
