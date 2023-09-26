@@ -114,9 +114,7 @@ func (p *Plan) String() string {
 	fmt.Fprintf(buf, "\n\nPlan for %v %d events\n", p.date.Format(time.RFC822), p.events.Len())
 	for e := p.events.Front(); e != nil; e = e.Next() {
 		v := e.Value.(*calendar.Event)
-		start, _ := time.Parse(time.RFC3339, v.Start.DateTime)
-		end, _ := time.Parse(time.RFC3339, v.End.DateTime)
-		fmt.Fprintf(buf, "---\nTitle: %s\nStart:%s\nEnd: %s\n", v.Summary, start.Format(time.Kitchen), end.Format(time.Kitchen))
+		fmt.Fprintf(buf, eventString(v))
 	}
 	return buf.String()
 }
@@ -292,4 +290,8 @@ func init() {
 	planCmd.Flags().DurationVar(&meetingsTime, "meetings", 0, "desired meetings overall time duration (e.g 1h30m")
 	planCmd.Flags().DurationVar(&tasks, "break", time.Hour, "desired break time duration (e.g 1h)")
 	rootCmd.AddCommand(planCmd)
+}
+
+var eventFormat = func(title, startTime, endTime string) string {
+	return fmt.Sprintf("%17s: %s", startTime+"-"+endTime, title)
 }

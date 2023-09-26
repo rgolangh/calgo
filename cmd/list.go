@@ -65,12 +65,12 @@ and sorted by their %s
 			log.Fatalf("Unable to retrieve next ten of the user's events: %v", err)
 		}
 
-		fmt.Println("Upcoming events:")
+		fmt.Printf("Upcoming events(%d):\n", len(events.Items))
 		if len(events.Items) == 0 {
 			fmt.Println("No upcoming events found.")
 		} else {
 			for _, item := range events.Items {
-				printEvent(item)
+				fmt.Printf(eventString(item))
 			}
 		}
 		return nil
@@ -188,7 +188,7 @@ func timeFromExpression(pointInTime time.Time, s string) (time.Time, error) {
 	return pointInTime.AddDate(0, 0, delta), nil
 }
 
-func printEvent(e *calendar.Event) {
+func eventString(e *calendar.Event) string {
 	parse, err := time.Parse(time.RFC3339, e.Start.DateTime)
 	if err != nil {
 		fmt.Println(err)
@@ -197,7 +197,11 @@ func printEvent(e *calendar.Event) {
 	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Printf("%v-%v - %v\n", parse.Format(time.Kitchen), end.Format(time.Kitchen), e.Summary)
+	var n = ""
+	if len(e.Id) == 0 {
+		n = "[+]"
+	}
+	return fmt.Sprintf("%-17s - %-3s %v\n", fmt.Sprintf("%s - %s", parse.Format(time.Kitchen), end.Format(time.Kitchen)), n, e.Summary)
 }
 
 func init() {
